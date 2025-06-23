@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+const supabaseUrl = 'https://lnybxilouatjribioujv.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxueWJ4aWxvdWF0anJpYmlvdWp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMDU4MTksImV4cCI6MjA2NDc4MTgxOX0.86A7FEkUHsmphPS8LyHoOr3ZtkGlaGw1sQJrOoWI1LQ';
 
 class MonitorAnalyticsScreen extends StatefulWidget {
   const MonitorAnalyticsScreen({super.key});
@@ -12,7 +16,9 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
   int selectedFeeling = -1;
   String? selectedMedication;
   final TextEditingController descriptionController = TextEditingController();
-  final List<_MoodEntry> _entries = [];
+  late List<MoodEntry> _entries = [];
+  bool _isLoading = true;
+  bool _isSubmitting = false;
 
   final List<String> medications = [
     'Paracetamol',
@@ -20,11 +26,54 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
     'Aspirin',
     'Metformin',
     'Atorvastatin',
+    'Amoxicillin',
+    'Vitamin D',
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMoodEntries();
+  }
+
+  Future<void> _fetchMoodEntries() async {
+    setState(() => _isLoading = true);
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await Supabase.instance.client
+          .from('mood_entries')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: true);
+
+      if (response != null) {
+        setState(() {
+          _entries = (response as List).map<MoodEntry>((entry) => MoodEntry(
+                date: DateTime.parse(entry['created_at']),
+                rating: entry['rating'],
+                note: entry['note'] ?? '',
+                medication: entry['medication'] ?? '',
+              )).toList();
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching mood entries: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load mood history: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
 
   List<FlSpot> _buildMoodTrend() {
     if (_entries.isEmpty) return [];
-    final Map<String, _MoodEntry> dayMap = {};
+    final Map<String, MoodEntry> dayMap = {};
     for (final entry in _entries) {
       final key = "${entry.date.year}-${entry.date.month}-${entry.date.day}";
       dayMap[key] = entry;
@@ -49,7 +98,7 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
     );
   }
 
-  void _onSubmit() {
+  Future<void> _onSubmit() async {
     if (selectedFeeling < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select how you feel')),
@@ -57,24 +106,49 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
       return;
     }
     if (selectedMedication == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Please select medication')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select medication')),
+      );
       return;
     }
-    setState(() {
-      _entries.add(
-        _MoodEntry(
-          DateTime.now(),
-          selectedFeeling,
-          descriptionController.text.trim(),
-          selectedMedication!,
-        ),
+
+    setState(() => _isSubmitting = true);
+    try {
+      final userId = Supabase.instance.client.auth.currentUser?.id;
+      if (userId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('User not signed in!')),
+        );
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      await Supabase.instance.client.from('mood_entries').insert({
+        'user_id': userId,
+        'rating': selectedFeeling,
+        'note': descriptionController.text.trim(),
+        'medication': selectedMedication,
+      });
+
+      await _fetchMoodEntries();
+
+      setState(() {
+        selectedFeeling = -1;
+        descriptionController.clear();
+        selectedMedication = null;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Mood entry saved successfully')),
       );
-      selectedFeeling = -1;
-      descriptionController.clear();
-      selectedMedication = null;
-    });
+    } catch (e) {
+      debugPrint('Error saving mood entry: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save mood entry: ${e.toString()}')),
+      );
+    } finally {
+      setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -100,7 +174,7 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Realtime Health Analytics'),
+        title: const Text('Health Analytics'),
         centerTitle: true,
         actions: [
           IconButton(
@@ -111,212 +185,231 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isWide = constraints.maxWidth >= 700;
-          return AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Entry Form Card
-                  Card(
-                    elevation: 6,
-                    margin: const EdgeInsets.only(bottom: 28),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(22),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.sentiment_satisfied_alt,
-                                color: Colors.deepPurple,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'How are you feeling today?',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ],
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 700;
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Entry Form Card
+                        Card(
+                          elevation: 6,
+                          margin: const EdgeInsets.only(bottom: 28),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
                           ),
-                          const SizedBox(height: 14),
-                          // One-line emoji selector
-                          SizedBox(
-                            height: 64,
-                            child: ListView.separated(
-                              scrollDirection: Axis.horizontal,
-                              itemCount: emojis.length,
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 16),
-                              itemBuilder: (context, i) {
-                                final selected = selectedFeeling == i;
-                                return GestureDetector(
-                                  onTap: () =>
-                                      setState(() => selectedFeeling = i),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                        color: selected
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.primary
-                                            : Colors.transparent,
-                                        width: 2.5,
-                                      ),
-                                      shape: BoxShape.circle,
+                          child: Padding(
+                            padding: const EdgeInsets.all(22),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.sentiment_satisfied_alt,
+                                      color: Colors.deepPurple,
                                     ),
-                                    child: CircleAvatar(
-                                      radius: selected ? 32 : 27,
-                                      backgroundColor: selected
-                                          ? Theme.of(context)
-                                                .colorScheme
-                                                .primary
-                                                .withOpacity(0.15)
-                                          : Colors.grey.shade200,
-                                      child: Text(
-                                        emojis[i],
-                                        style: const TextStyle(fontSize: 30),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      'How are you feeling today?',
+                                      style: Theme.of(context).textTheme.titleMedium,
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 14),
+                                // One-line emoji selector
+                                SizedBox(
+                                  height: 64,
+                                  child: ListView.separated(
+                                    scrollDirection: Axis.horizontal,
+                                    itemCount: emojis.length,
+                                    separatorBuilder: (_, __) =>
+                                        const SizedBox(width: 16),
+                                    itemBuilder: (context, i) {
+                                      final selected = selectedFeeling == i;
+                                      return GestureDetector(
+                                        onTap: () =>
+                                            setState(() => selectedFeeling = i),
+                                        child: AnimatedContainer(
+                                          duration:
+                                              const Duration(milliseconds: 200),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(
+                                              color: selected
+                                                  ? Theme.of(context)
+                                                      .colorScheme
+                                                      .primary
+                                                  : Colors.transparent,
+                                              width: 2.5,
+                                            ),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: CircleAvatar(
+                                            radius: selected ? 32 : 27,
+                                            backgroundColor: selected
+                                                ? Theme.of(context)
+                                                    .colorScheme
+                                                    .primary
+                                                    .withOpacity(0.15)
+                                                : Colors.grey.shade200,
+                                            child: Text(
+                                              emojis[i],
+                                              style:
+                                                  const TextStyle(fontSize: 30),
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                if (selectedFeeling >= 0) ...[
+                                  const SizedBox(height: 8),
+                                  Center(
+                                    child: Text(
+                                      feelingsText[selectedFeeling],
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondary,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
                                   ),
-                                );
-                              },
-                            ),
-                          ),
-                          if (selectedFeeling >= 0) ...[
-                            const SizedBox(height: 8),
-                            Center(
-                              child: Text(
-                                feelingsText[selectedFeeling],
-                                style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.secondary,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 18),
+                                ],
+                                const SizedBox(height: 18),
 
-                          // Medication dropdown
-                          DropdownButtonFormField<String>(
-                            decoration: InputDecoration(
-                              labelText: 'Medication Taken',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                            ),
-                            isExpanded: true,
-                            value: selectedMedication,
-                            items: medications
-                                .map(
-                                  (med) => DropdownMenuItem(
-                                    value: med,
-                                    child: Text(med),
+                                // Medication dropdown
+                                DropdownButtonFormField<String>(
+                                  decoration: InputDecoration(
+                                    labelText: 'Medication Taken',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
-                                )
-                                .toList(),
-                            onChanged: (val) =>
-                                setState(() => selectedMedication = val),
-                            hint: const Text('Select medication'),
-                          ),
-                          const SizedBox(height: 18),
+                                  isExpanded: true,
+                                  value: selectedMedication,
+                                  items: medications
+                                      .map(
+                                        (med) => DropdownMenuItem(
+                                          value: med,
+                                          child: Text(med),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (val) =>
+                                      setState(() => selectedMedication = val),
+                                  hint: const Text('Select medication'),
+                                ),
+                                const SizedBox(height: 18),
 
-                          TextField(
-                            controller: descriptionController,
-                            maxLines: isWide ? 4 : 3,
-                            decoration: InputDecoration(
-                              hintText: 'Describe any symptoms or feelings...',
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                                TextField(
+                                  controller: descriptionController,
+                                  maxLines: isWide ? 4 : 3,
+                                  decoration: InputDecoration(
+                                    hintText:
+                                        'Describe any symptoms or feelings...',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    icon: _isSubmitting
+                                        ? const SizedBox(
+                                            width: 24,
+                                            height: 24,
+                                            child:
+                                                CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(Icons.edit_note),
+                                    label: Text(_isSubmitting
+                                        ? 'Saving...'
+                                        : 'Log Feedback'),
+                                    onPressed: _isSubmitting ? null : _onSubmit,
+                                    style: ElevatedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      backgroundColor:
+                                          Theme.of(context).colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      textStyle: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton.icon(
-                              icon: const Icon(Icons.edit_note),
-                              label: const Text('Log Feedback'),
-                              onPressed: _onSubmit,
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                                backgroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.primary,
-                                foregroundColor: Colors.white, // <-- Add this!
-                                textStyle: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
+                        ),
+                        // Realtime Analytics Cards
+                        isWide
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _buildMoodSummary(
+                                        emojis, feelingsText),
+                                  ),
+                                  const SizedBox(width: 22),
+                                  Expanded(
+                                    child: _buildMedicationMoodCard(
+                                        medMood, emojis),
+                                  ),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  _buildMoodSummary(emojis, feelingsText),
+                                  const SizedBox(height: 22),
+                                  _buildMedicationMoodCard(medMood, emojis),
+                                ],
                               ),
-                            ),
-                          ),
-                        ],
-                      ),
+                        const SizedBox(height: 30),
+                        // Timeline + Trend
+                        isWide
+                            ? Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: _buildTimelineCard(
+                                        emojis, feelingsText),
+                                  ),
+                                  const SizedBox(width: 22),
+                                  Expanded(child: _buildTrendCard(emojis)),
+                                ],
+                              )
+                            : Column(
+                                children: [
+                                  _buildTimelineCard(emojis, feelingsText),
+                                  const SizedBox(height: 28),
+                                  _buildTrendCard(emojis),
+                                ],
+                              ),
+                      ],
                     ),
                   ),
-                  // Realtime Analytics Cards
-                  isWide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _buildMoodSummary(emojis, feelingsText),
-                            ),
-                            const SizedBox(width: 22),
-                            Expanded(
-                              child: _buildMedicationMoodCard(medMood, emojis),
-                            ),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildMoodSummary(emojis, feelingsText),
-                            const SizedBox(height: 22),
-                            _buildMedicationMoodCard(medMood, emojis),
-                          ],
-                        ),
-                  const SizedBox(height: 30),
-                  // Timeline + Trend
-                  isWide
-                      ? Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Expanded(
-                              child: _buildTimelineCard(emojis, feelingsText),
-                            ),
-                            const SizedBox(width: 22),
-                            Expanded(child: _buildTrendCard(emojis)),
-                          ],
-                        )
-                      : Column(
-                          children: [
-                            _buildTimelineCard(emojis, feelingsText),
-                            const SizedBox(height: 28),
-                            _buildTrendCard(emojis),
-                          ],
-                        ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
     );
   }
 
@@ -386,9 +479,7 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
   }
 
   Widget _buildMedicationMoodCard(
-    Map<String, double> medMood,
-    List<String> emojis,
-  ) {
+      Map<String, double> medMood, List<String> emojis) {
     return Card(
       elevation: 5,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -615,7 +706,8 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
                             dotData: const FlDotData(show: true),
                             belowBarData: BarAreaData(
                               show: true,
-                              color: Colors.deepPurpleAccent.withOpacity(0.15),
+                              color:
+                                  Colors.deepPurpleAccent.withOpacity(0.15),
                             ),
                           ),
                         ],
@@ -670,9 +762,8 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
         final moodStats = [
           ...List.generate(5, (i) {
             final count = _entries.where((e) => e.rating == i).length;
-            final pct = _entries.isNotEmpty
-                ? count / _entries.length * 100
-                : 0.0;
+            final pct =
+                _entries.isNotEmpty ? count / _entries.length * 100 : 0.0;
             return {
               'emoji': emojis[i],
               'label': feelingsText[i],
@@ -712,10 +803,11 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
                           style: const TextStyle(fontSize: 22),
                         ),
                         const SizedBox(width: 10),
-                        SizedBox(width: 70, child: Text(m['label'] as String)),
+                        SizedBox(
+                            width: 70, child: Text(m['label'] as String)),
                         Expanded(
                           child: LinearProgressIndicator(
-                            value: (m['pct'] as num) / 100, // <-- CORRECTED
+                            value: (m['pct'] as num) / 100,
                             backgroundColor: _moodColor(
                               moodStats.indexOf(m),
                             ).withOpacity(0.15),
@@ -728,7 +820,7 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
                         const SizedBox(width: 12),
                         Text(
                           '${(m['pct'] as num).toStringAsFixed(0)}%',
-                        ), // <-- CORRECTED
+                        ),
                       ],
                     ),
                   ),
@@ -857,11 +949,16 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
   }
 }
 
-class _MoodEntry {
+class MoodEntry {
   final DateTime date;
   final int rating;
   final String note;
   final String medication;
 
-  _MoodEntry(this.date, this.rating, this.note, this.medication);
+  MoodEntry({
+    required this.date,
+    required this.rating,
+    required this.note,
+    required this.medication,
+  });
 }
