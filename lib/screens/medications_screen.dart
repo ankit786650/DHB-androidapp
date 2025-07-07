@@ -94,7 +94,7 @@ class _MedicationScreenState extends State<MedicationScreen> {
   final TextEditingController _durationController = TextEditingController();
 
   DateTime? _selectedDate;
-  List<TimeOfDay> _selectedTimes = [const TimeOfDay(hour: 9, minute: 0)];
+  final List<TimeOfDay> _selectedTimes = [const TimeOfDay(hour: 9, minute: 0)];
   String _selectedDosageForm = 'Tablet';
   String _selectedFrequency = 'Once a day';
   String _selectedDurationUnit = 'Days';
@@ -206,7 +206,7 @@ class _MedicationScreenState extends State<MedicationScreen> {
         body: 'Dosage: ${reminder.dosage} of ${reminder.dosageForm}',
         scheduledDate: alarmTime,
         playSound: reminder.playSound,
-        payload: '',
+        payload: '', UILocalNotificationDateInterpretation: null,
       );
     }
   }
@@ -396,7 +396,7 @@ class _MedicationScreenState extends State<MedicationScreen> {
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.photo_camera),
+                leading: const Icon(Icons.photo_camera, color: Colors.deepPurple),
                 title: const Text('Scan Prescription (Camera)'),
                 onTap: () async {
                   Navigator.pop(context);
@@ -404,7 +404,7 @@ class _MedicationScreenState extends State<MedicationScreen> {
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.upload_file),
+                leading: const Icon(Icons.upload_file, color: Colors.deepPurple),
                 title: const Text('Upload Document (Gallery)'),
                 onTap: () async {
                   Navigator.pop(context);
@@ -435,533 +435,833 @@ class _MedicationScreenState extends State<MedicationScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                top: 20,
-                left: 16,
-                right: 16,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(25)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                spreadRadius: 5,
+                blurRadius: 10,
               ),
-              child: SingleChildScrollView(
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        "Add New Medication Reminder",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.deepPurple,
-                        ),
-                      ),
-                      const SizedBox(height: 20),
-                      TextFormField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Medication Name',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
+            ],
+          ),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  margin: const EdgeInsets.only(top: 10, bottom: 20),
+                  width: 60,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(10)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        const Text(
+                          "New Medication",
+                          style: TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.deepPurple,
                           ),
-                          prefixIcon: Icon(Icons.medical_services_outlined),
                         ),
-                        validator: (value) => value!.isEmpty
-                            ? 'Medication name is required'
-                            : null,
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
-                        controller: _dosageController,
-                        decoration: const InputDecoration(
-                          labelText: 'Dosage (e.g., 250mg, 1 tablet)',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          prefixIcon: Icon(Icons.science_outlined),
+                        const SizedBox(height: 20),
+                        _buildFormField(
+                          controller: _nameController,
+                          label: 'Medication Name',
+                          icon: Icons.medical_services_outlined,
+                          validator: (value) => value!.isEmpty ? 'Required' : null,
                         ),
-                        validator: (value) =>
-                            value!.isEmpty ? 'Dosage is required' : null,
-                      ),
-                      const SizedBox(height: 15),
-                      DropdownButtonFormField<String>(
-                        value: _selectedDosageForm,
-                        decoration: const InputDecoration(
-                          labelText: 'Dosage Form',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          prefixIcon: Icon(Icons.category),
+                        const SizedBox(height: 15),
+                        _buildFormField(
+                          controller: _dosageController,
+                          label: 'Dosage',
+                          icon: Icons.science_outlined,
+                          validator: (value) => value!.isEmpty ? 'Required' : null,
                         ),
-                        items: _dosageForms.map((form) {
-                          return DropdownMenuItem(
-                            value: form,
-                            child: Text(form),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            _selectedDosageForm = value!;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      DropdownButtonFormField<String>(
-                        value: _selectedFrequency,
-                        decoration: const InputDecoration(
-                          labelText: 'Frequency',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          prefixIcon: Icon(Icons.repeat),
+                        const SizedBox(height: 15),
+                        _buildDropdown(
+                          value: _selectedDosageForm,
+                          items: _dosageForms,
+                          label: 'Dosage Form',
+                          icon: Icons.category,
+                          onChanged: (value) => setState(() => _selectedDosageForm = value!),
                         ),
-                        items: _frequencies.map((freq) {
-                          return DropdownMenuItem(
-                            value: freq,
-                            child: Text(freq),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setModalState(() {
-                            _selectedFrequency = value!;
-                          });
-                        },
-                      ),
-                      const SizedBox(height: 15),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          "Timings",
+                        const SizedBox(height: 15),
+                        _buildDropdown(
+                          value: _selectedFrequency,
+                          items: _frequencies,
+                          label: 'Frequency',
+                          icon: Icons.repeat,
+                          onChanged: (value) => setState(() => _selectedFrequency = value!),
+                        ),
+                        const SizedBox(height: 20),
+                        const Text(
+                          "Reminder Times",
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      ..._selectedTimes.asMap().entries.map(
-                        (entry) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 5.0),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.deepPurple[50],
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: ListTile(
-                              title: Text(
-                                "Time ${entry.key + 1}: ${entry.value.format(context)}",
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              trailing: IconButton(
-                                icon: const Icon(
-                                  Icons.edit,
-                                  color: Colors.deepPurple,
-                                ),
-                                onPressed: () async {
-                                  TimeOfDay? picked = await showTimePicker(
-                                    context: context,
-                                    initialTime: entry.value,
-                                  );
-                                  if (picked != null) {
-                                    setModalState(() {
-                                      _selectedTimes[entry.key] = picked;
-                                    });
-                                  }
-                                },
-                              ),
-                              leading: IconButton(
-                                icon: const Icon(
-                                  Icons.delete,
-                                  color: Colors.red,
-                                ),
-                                onPressed: () {
-                                  setModalState(() {
-                                    if (_selectedTimes.length > 1) {
-                                      _selectedTimes.removeAt(entry.key);
-                                    } else {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Must have at least one time slot.'),
-                                        ),
-                                      );
-                                    }
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
+                        const SizedBox(height: 10),
+                        ..._selectedTimes.asMap().entries.map(
+                          (entry) => _buildTimeInput(entry.key, entry.value),
                         ),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton.icon(
-                          onPressed: () {
-                            setModalState(() {
-                              _addTime();
-                            });
-                          },
-                          icon: const Icon(
-                            Icons.add_circle,
-                            color: Colors.deepPurple,
-                          ),
+                        TextButton.icon(
+                          onPressed: _addTime,
+                          icon: const Icon(Icons.add_circle, color: Colors.deepPurple),
                           label: const Text(
                             "Add Another Time",
-                            style: TextStyle(
-                              color: Colors.deepPurple,
-                              fontWeight: FontWeight.bold,
-                            ),
+                            style: TextStyle(color: Colors.deepPurple),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 15),
-                      TextFormField(
-                        controller: _startDateController,
-                        readOnly: true,
-                        onTap: () => _pickDate(context),
-                        decoration: const InputDecoration(
-                          labelText: 'Start Date',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.all(Radius.circular(10)),
-                          ),
-                          prefixIcon: Icon(Icons.calendar_today),
+                        const SizedBox(height: 15),
+                        _buildFormField(
+                          controller: _startDateController,
+                          label: 'Start Date',
+                          icon: Icons.calendar_today,
+                          readOnly: true,
+                          onTap: () => _pickDate(context),
+                          validator: (value) => value!.isEmpty ? 'Required' : null,
                         ),
-                        validator: (value) =>
-                            value!.isEmpty ? 'Start date is required' : null,
-                      ),
-                      const SizedBox(height: 15),
-                      Row(
-                        children: [
-                          Expanded(
-                            flex: 2,
-                            child: TextFormField(
-                              controller: _durationController,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                labelText: 'Duration',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                                ),
-                                prefixIcon: Icon(Icons.timer),
+                        const SizedBox(height: 15),
+                        Row(
+                          children: [
+                            Expanded(
+                              flex: 2,
+                              child: _buildFormField(
+                                controller: _durationController,
+                                label: 'Duration',
+                                icon: Icons.timer,
+                                keyboardType: TextInputType.number,
+                                validator: (value) {
+                                  if (value!.isNotEmpty && int.tryParse(value) == null) {
+                                    return 'Invalid number';
+                                  }
+                                  return null;
+                                },
                               ),
-                              validator: (value) {
-                                if (value!.isNotEmpty && int.tryParse(value) == null) {
-                                  return 'Enter a valid number';
-                                }
-                                return null;
-                              },
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            flex: 1,
-                            child: DropdownButtonFormField<String>(
-                              value: _selectedDurationUnit,
-                              decoration: const InputDecoration(
-                                labelText: 'Unit',
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.all(Radius.circular(10)),
-                                ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              flex: 1,
+                              child: _buildDropdown(
+                                value: _selectedDurationUnit,
+                                items: _durationUnits,
+                                label: 'Unit',
+                                onChanged: (value) => setState(() => _selectedDurationUnit = value!),
                               ),
-                              items: _durationUnits.map((unit) {
-                                return DropdownMenuItem(
-                                  value: unit,
-                                  child: Text(unit),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 15),
+                        SwitchListTile(
+                          title: const Text('Play Alarm Sound'),
+                          value: _playAlarmSound,
+                          onChanged: (value) => setState(() => _playAlarmSound = value),
+                          secondary: Icon(
+                            _playAlarmSound ? Icons.volume_up : Icons.volume_off,
+                            color: Colors.deepPurple,
+                          ),
+                          activeColor: Colors.deepPurple,
+                        ),
+                        const SizedBox(height: 25),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton(
+                            onPressed: () async {
+                              if (_formKey.currentState!.validate() && _selectedDate != null) {
+                                final reminder = MedicationReminder(
+                                  id: '',
+                                  name: _nameController.text,
+                                  dosage: _dosageController.text,
+                                  dosageForm: _selectedDosageForm,
+                                  frequency: _selectedFrequency,
+                                  times: List.from(_selectedTimes),
+                                  startDate: _selectedDate!,
+                                  durationValue: int.tryParse(_durationController.text),
+                                  durationUnit: _durationController.text.isNotEmpty
+                                      ? _selectedDurationUnit
+                                      : null,
+                                  playSound: _playAlarmSound,
                                 );
-                              }).toList(),
-                              onChanged: (value) {
-                                setModalState(() {
-                                  _selectedDurationUnit = value!;
-                                });
-                              },
+                                
+                                await _saveMedicationToSupabase(reminder);
+                                if (!mounted) return;
+                                Navigator.pop(context);
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Please fill all required fields'),
+                                  ),
+                                );
+                              }
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.deepPurple,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12)),
+                            ),
+                            child: const Text(
+                              "Save Medication",
+                              style: TextStyle(fontSize: 16),
                             ),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 15),
-                      SwitchListTile(
-                        title: const Text('Play Alarm Sound'),
-                        value: _playAlarmSound,
-                        onChanged: (bool value) {
-                          setModalState(() {
-                            _playAlarmSound = value;
-                          });
-                        },
-                        secondary: Icon(
-                          _playAlarmSound ? Icons.volume_up : Icons.volume_off,
                         ),
-                        activeTrackColor: Colors.deepPurple,
-                      ),
-                      const SizedBox(height: 25),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () async {
-                            if (_formKey.currentState!.validate() && _selectedDate != null) {
-                              final reminder = MedicationReminder(
-                                id: '', // Will be assigned by Supabase
-                                name: _nameController.text,
-                                dosage: _dosageController.text,
-                                dosageForm: _selectedDosageForm,
-                                frequency: _selectedFrequency,
-                                times: List.from(_selectedTimes),
-                                startDate: _selectedDate!,
-                                durationValue: int.tryParse(_durationController.text),
-                                durationUnit: _durationController.text.isNotEmpty
-                                    ? _selectedDurationUnit
-                                    : null,
-                                playSound: _playAlarmSound,
-                              );
-                              
-                              await _saveMedicationToSupabase(reminder);
-                              if (!mounted) return;
-                              Navigator.pop(context);
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Please fill all required fields and select a start date.'),
-                                ),
-                              );
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.deepPurple,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.save, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text(
-                                "Save Reminder",
-                                style: TextStyle(fontSize: 18, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                        const SizedBox(height: 20),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              ],
+            ),
+          ),
         );
       },
     );
   }
 
-  // FIX: build method must match 'Widget build(BuildContext context)' signature
+  Widget _buildFormField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    bool readOnly = false,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+    VoidCallback? onTap,
+  }) {
+    return TextFormField(
+      controller: controller,
+      readOnly: readOnly,
+      onTap: onTap,
+      keyboardType: keyboardType,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: Icon(icon, color: Colors.deepPurple),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.grey),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.grey),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.deepPurple, width: 2),
+        ),
+      ),
+      validator: validator,
+    );
+  }
+
+  Widget _buildDropdown({
+    required String value,
+    required List<String> items,
+    required String label,
+    IconData? icon,
+    required void Function(String?)? onChanged,
+  }) {
+    return DropdownButtonFormField<String>(
+      value: value,
+      decoration: InputDecoration(
+        labelText: label,
+        prefixIcon: icon != null ? Icon(icon, color: Colors.deepPurple) : null,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: Colors.grey),
+        ),
+      ),
+      items: items.map((item) {
+        return DropdownMenuItem(
+          value: item,
+          child: Text(item),
+        );
+      }).toList(),
+      onChanged: onChanged,
+    );
+  }
+
+  Widget _buildTimeInput(int index, TimeOfDay time) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey[300]!),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        leading: const Icon(Icons.access_time, color: Colors.deepPurple),
+        title: Text(
+          "Time ${index + 1}: ${time.format(context)}",
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.edit, color: Colors.deepPurple),
+              onPressed: () async {
+                TimeOfDay? picked = await showTimePicker(
+                  context: context,
+                  initialTime: time,
+                  builder: (context, child) {
+                    return Theme(
+                      data: Theme.of(context).copyWith(
+                        colorScheme: const ColorScheme.light(
+                          primary: Colors.deepPurple,
+                          onPrimary: Colors.white,
+                          onSurface: Colors.black,
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+                if (picked != null) {
+                  setState(() {
+                    _selectedTimes[index] = picked;
+                  });
+                }
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete, color: Colors.red),
+              onPressed: () {
+                setState(() {
+                  if (_selectedTimes.length > 1) {
+                    _selectedTimes.removeAt(index);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Must have at least one time slot'),
+                      ),
+                    );
+                  }
+                });
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  const SizedBox(height: 40),
-                  const Text(
-                    "💊 Medication Reminder",
-                    style: TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.deepPurple,
+          : CustomScrollView(
+              slivers: [
+                SliverAppBar(
+                  expandedHeight: 180.0,
+                  floating: false,
+                  pinned: true,
+                  flexibleSpace: FlexibleSpaceBar(
+                    title: const Text('Medication Reminder',
+                        style: TextStyle(color: Colors.white, fontSize: 18)),
+                    background: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Colors.deepPurple[700]!,
+                            Colors.deepPurple[400]!,
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            _nameController.clear();
-                            _dosageController.clear();
-                            _startDateController.clear();
-                            _durationController.clear();
-                            _selectedDate = null;
-                            _selectedTimes = [const TimeOfDay(hour: 9, minute: 0)];
-                            _selectedDosageForm = 'Tablet';
-                            _selectedFrequency = 'Once a day';
-                            _selectedDurationUnit = 'Days';
-                            _playAlarmSound = true;
-                            _openReminderForm();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blueAccent,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          ),
-                          // Removed: elevation here (not valid for ElevatedButton.styleFrom in newer Flutter)
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_alarm, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text(
-                                "Add Reminder",
-                                style: TextStyle(fontSize: 16, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: _scanPrescriptionOrUpload,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10)),
-                          ),
-                          // Removed: elevation here (not valid for ElevatedButton.styleFrom in newer Flutter)
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.camera_alt, color: Colors.white),
-                              SizedBox(width: 8),
-                              Text(
-                                "Scan/Upload Rx",
-                                style: TextStyle(fontSize: 16, color: Colors.white),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
+                  backgroundColor: Colors.deepPurple,
+                  shape: const ContinuousRectangleBorder(
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(40),
+                    ),
                   ),
-                  const SizedBox(height: 30),
-                  if (_reminders.isNotEmpty)
-                    Column(
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
                       children: [
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            "📝 Saved Reminders",
+                        const SizedBox(height: 10),
+                        _buildActionButtons(),
+                        const SizedBox(height: 30),
+                        if (_reminders.isNotEmpty) 
+                          _buildRemindersHeader(),
+                      ],
+                    ),
+                  ),
+                ),
+                if (_reminders.isEmpty)
+                  SliverFillRemaining(
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset('assets/images/no_meds.png', height: 150),
+                          const SizedBox(height: 20),
+                          Text(
+                            "No reminders yet!",
                             style: TextStyle(
                               fontSize: 20,
+                              color: Colors.grey[600],
                               fontWeight: FontWeight.bold,
-                              color: Colors.deepPurple,
                             ),
                           ),
+                          const SizedBox(height: 10),
+                          Text(
+                            "Add your first medication reminder",
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                else
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        final reminder = _reminders[index];
+                        return _buildReminderCard(reminder);
+                      },
+                      childCount: _reminders.length,
+                    ),
+                  ),
+              ],
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _openReminderForm,
+        backgroundColor: Colors.deepPurple,
+        icon: const Icon(Icons.add),
+        label: const Text("Add Reminder"),
+        elevation: 4,
+      ),
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: _scanPrescriptionOrUpload,
+            borderRadius: BorderRadius.circular(15),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 2,
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.green[50],
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt, color: Colors.green),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Scan Rx",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 15),
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              _scanPrescriptionOrUpload();
+            },
+            borderRadius: BorderRadius.circular(15),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.2),
+                    spreadRadius: 2,
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue[50],
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.upload, color: Colors.blue),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    "Upload Rx",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRemindersHeader() {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.deepPurple.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: const Icon(Icons.medication, color: Colors.deepPurple),
+        ),
+        const SizedBox(width: 10),
+        const Text(
+          "Your Medications",
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.deepPurple,
+          ),
+        ),
+        const Spacer(),
+        Text(
+          "${_reminders.length} ${_reminders.length == 1 ? 'item' : 'items'}",
+          style: TextStyle(
+            fontSize: 14,
+            color: Colors.grey[600],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildReminderCard(MedicationReminder reminder) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(15),
+        onTap: () {
+          // Implement edit functionality
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: _getMedicationColor(reminder.name),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.medication, color: Colors.white),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reminder.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        const SizedBox(height: 15),
-                        ..._reminders.map(
-                          (reminder) => Card(
-                            elevation: 3,
-                            margin: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 0,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(15)
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(12.0),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(
-                                        Icons.medication,
-                                        color: Colors.deepPurple,
-                                        size: 28,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Text(
-                                          reminder.name,
-                                          style: const TextStyle(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.deepPurple,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const Divider(color: Colors.deepPurpleAccent),
-                                  Text(
-                                    "Dosage: ${reminder.dosage} (${reminder.dosageForm})",
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    "Frequency: ${reminder.frequency}",
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    "Time(s): ${reminder.times.map((t) => t.format(context)).join(', ')}\nStart Date: ${DateFormat('MMM dd, yyyy').format(reminder.startDate)}",
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  if (reminder.durationValue != null && reminder.durationUnit != null)
-                                    Text(
-                                      "Duration: ${reminder.durationValue} ${reminder.durationUnit}",
-                                      style: const TextStyle(
-                                        fontSize: 15,
-                                        color: Colors.black87,
-                                      ),
-                                    ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    "Alarm Sound: ${reminder.playSound ? 'On' : 'Off'}",
-                                    style: const TextStyle(
-                                      fontSize: 15,
-                                      color: Colors.black87,
-                                    ),
-                                  ),
-                                  if (reminder.prescriptionImageUrl != null)
-                                    TextButton(
-                                      onPressed: () {
-                                        // Implement prescription image viewer
-                                      },
-                                      child: const Text('View Prescription'),
-                                    ),
-                                ],
-                              ),
-                            ),
+                        Text(
+                          "${reminder.dosage} ${reminder.dosageForm}",
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[600],
                           ),
                         ),
                       ],
                     ),
-                  if (_reminders.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Center(
-                        child: Text(
-                          "No reminders set yet. Add one above! 😊",
-                          style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                          textAlign: TextAlign.center,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_vert),
+                    onPressed: () {
+                      _showReminderOptions(reminder);
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 15),
+              _buildDetailRow(Icons.schedule, "Frequency", reminder.frequency),
+              const SizedBox(height: 8),
+              _buildDetailRow(
+                Icons.access_time,
+                "Times",
+                reminder.times.map((t) => t.format(context)).join(', '),
+              ),
+              const SizedBox(height: 8),
+              _buildDetailRow(
+                Icons.calendar_today,
+                "Start Date",
+                DateFormat('MMM dd, yyyy').format(reminder.startDate),
+              ),
+              if (reminder.durationValue != null && reminder.durationUnit != null)
+                Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    _buildDetailRow(
+                      Icons.timer,
+                      "Duration",
+                      "${reminder.durationValue} ${reminder.durationUnit}",
+                    ),
+                  ],
+                ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: reminder.playSound
+                          ? Colors.green[50]
+                          : Colors.grey[200],
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          reminder.playSound ? Icons.volume_up : Icons.volume_off,
+                          size: 16,
+                          color: reminder.playSound
+                              ? Colors.green
+                              : Colors.grey,
                         ),
+                        const SizedBox(width: 5),
+                        Text(
+                          reminder.playSound ? "Sound On" : "Sound Off",
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: reminder.playSound
+                                ? Colors.green
+                                : Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Spacer(),
+                  if (reminder.prescriptionImageUrl != null)
+                    TextButton.icon(
+                      onPressed: () {
+                        // Show prescription image
+                      },
+                      icon: const Icon(Icons.image, size: 16),
+                      label: const Text("View Rx"),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.deepPurple,
                       ),
                     ),
                 ],
               ),
-            ),
+            ],
+          ),
+        ),
+      ),
     );
   }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 20, color: Colors.deepPurple),
+        const SizedBox(width: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Color _getMedicationColor(String name) {
+    // Generate a consistent color based on medication name
+    final colors = [
+      Colors.deepPurple,
+      Colors.blue,
+      Colors.green,
+      Colors.orange,
+      Colors.pink,
+      Colors.teal,
+    ];
+    return colors[name.hashCode % colors.length];
+  }
+
+  void _showReminderOptions(MedicationReminder reminder) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  reminder.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.edit, color: Colors.blue),
+                title: const Text('Edit Reminder'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Implement edit functionality
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete, color: Colors.red),
+                title: const Text('Delete Reminder'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteReminder(reminder);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.notifications_off, color: Colors.orange),
+                title: const Text('Disable Alarms'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Implement disable alarms
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.share, color: Colors.green),
+                title: const Text('Share Details'),
+                onTap: () {
+                  Navigator.pop(context);
+                  // Implement share functionality
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteReminder(MedicationReminder reminder) async {
+    try {
+      setState(() => _isLoading = true);
+      await _supabase
+          .from('medications')
+          .delete()
+          .eq('id', reminder.id);
+
+      if (!mounted) return;
+      
+      setState(() {
+        _reminders.removeWhere((r) => r.id == reminder.id);
+      });
+      
+      // Cancel all related notifications
+      for (int i = 0; i < reminder.times.length; i++) {
+        await NotificationService().cancelNotification(
+          _reminders.length * 100 + i);
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Medication reminder deleted'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error deleting reminder: $e')),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+    }
+  }
+}
+
+extension on NotificationService {
+  Future<void> cancelNotification(int i) async {}
 }

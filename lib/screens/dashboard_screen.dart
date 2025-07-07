@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'package:DHB/screens/nearby_facilities_screen.dart';
 import 'package:DHB/screens/monitor_analytics_screen.dart';
 import 'package:DHB/screens/health_qr_screen.dart';
 import 'package:DHB/screens/medications_screen.dart';

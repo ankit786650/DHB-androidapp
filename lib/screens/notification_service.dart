@@ -1,21 +1,28 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
-  final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
-  factory NotificationService() => _instance;
+  factory NotificationService() {
+    return _instance;
+  }
+
   NotificationService._internal();
 
   Future<void> init() async {
-    tz.initializeTimeZones();
+    const AndroidInitializationSettings initializationSettingsAndroid =
+        AndroidInitializationSettings('@mipmap/ic_launcher');
+    final DarwinInitializationSettings initializationSettingsIOS =
+        DarwinInitializationSettings();
 
-    const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-    const settings = InitializationSettings(android: android);
-    await _plugin.initialize(settings);
+    final InitializationSettings initializationSettings = InitializationSettings(
+      android: initializationSettingsAndroid,
+      iOS: initializationSettingsIOS,
+    );
+
+    await flutterLocalNotificationsPlugin.initialize(initializationSettings);
   }
 
   Future<void> scheduleNotification({
@@ -23,31 +30,33 @@ class NotificationService {
     required String title,
     required String body,
     required DateTime scheduledDate,
-    required bool playSound, required String payload,
+    required bool playSound,
+    String payload = '', required UILocalNotificationDateInterpretation,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
-      'med_channel',
-      'Medication Alerts',
-      channelDescription: 'Reminders for medication',
-      importance: Importance.max,
-      priority: Priority.high,
-      playSound: true,
-      sound: RawResourceAndroidNotificationSound(
-        'mysound',
-      ), // <-- No file extension
-    );
-
-    // Optionally add iOS details if you support iOS
-    final iosDetails = DarwinNotificationDetails(presentSound: playSound);
-
-    await _plugin.zonedSchedule(
+    await flutterLocalNotificationsPlugin.zonedSchedule(
       id,
       title,
       body,
       tz.TZDateTime.from(scheduledDate, tz.local),
-      NotificationDetails(android: androidDetails, iOS: iosDetails),
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'med_channel',
+          'Medication Reminders',
+          channelDescription: 'Channel for medication reminders',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: playSound,
+          sound: playSound ? RawResourceAndroidNotificationSound('alarm_sound') : null, // alarm_sound.mp3 in res/raw
+        ),
+        iOS: DarwinNotificationDetails(
+          presentSound: playSound,
+          sound: playSound ? 'alarm_sound.mp3' : null, // alarm_sound.mp3 in Xcode project
+        ),
+      ),
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      matchDateTimeComponents: DateTimeComponents.time,
+      payload: payload,
+      // Do NOT add uiLocalNotificationDateInterpretation or dateInterpretation unless your plugin version supports it!
+      // If you want to support recurring notifications, use matchDateTimeComponents.
     );
   }
 }

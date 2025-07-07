@@ -51,17 +51,15 @@ class _MonitorAnalyticsScreenState extends State<MonitorAnalyticsScreen> {
           .eq('user_id', userId)
           .order('created_at', ascending: true);
 
-      if (response != null) {
-        setState(() {
-          _entries = (response as List).map<MoodEntry>((entry) => MoodEntry(
-                date: DateTime.parse(entry['created_at']),
-                rating: entry['rating'],
-                note: entry['note'] ?? '',
-                medication: entry['medication'] ?? '',
-              )).toList();
-        });
-      }
-    } catch (e) {
+      setState(() {
+        _entries = (response as List).map<MoodEntry>((entry) => MoodEntry(
+              date: DateTime.parse(entry['created_at']),
+              rating: entry['rating'],
+              note: entry['note'] ?? '',
+              medication: entry['medication'] ?? '',
+            )).toList();
+      });
+        } catch (e) {
       debugPrint('Error fetching mood entries: $e');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load mood history: ${e.toString()}')),

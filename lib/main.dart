@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'home_screen.dart';
+import 'home_screen.dart'; // ✅ import your home screen
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
-    url: 'https://lnybxilouatjribioujv.supabase.co', // replace with your Supabase URL
-    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxueWJ4aWxvdWF0anJpYmlvdWp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMDU4MTksImV4cCI6MjA2NDc4MTgxOX0.86A7FEkUHsmphPS8LyHoOr3ZtkGlaGw1sQJrOoWI1LQ', // replace with your Anon public key
+    url: 'https://lnybxilouatjribioujv.supabase.co',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxueWJ4aWxvdWF0anJpYmlvdWp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkyMDU4MTksImV4cCI6MjA2NDc4MTgxOX0.86A7FEkUHsmphPS8LyHoOr3ZtkGlaGw1sQJrOoWI1LQ',
   );
 
   runApp(const MyApp());
@@ -43,7 +44,8 @@ class AuthScreen extends StatefulWidget {
 
 class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _animation;
+  late Animation<double> _opacityAnimation;
+  late Animation<Offset> _slideAnimation;
   bool isLogin = true;
   bool isLoading = false;
   final _formKey = GlobalKey<FormState>();
@@ -59,12 +61,19 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   void initState() {
     super.initState();
     _controller = AnimationController(
-      duration: const Duration(milliseconds: 1000),
+      duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    _animation = Tween<double>(begin: 0, end: 1).animate(
+
+    _opacityAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.2),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuint));
+
     _controller.forward();
   }
 
@@ -86,275 +95,121 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     });
   }
 
-  Future<void> _signUp() async {
-    if (!_formKey.currentState!.validate()) return;
-
+  void _signIn() async {
     setState(() => isLoading = true);
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-    final username = _usernameController.text.trim();
-    final phone = _phoneController.text.trim();
+    try {
+      final email = _emailController.text;
+      final password = _passwordController.text;
 
+      final response = await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (response.user != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomeScreen()),
+        );
+      } else {
+        _showSnackBar('Invalid credentials');
+      }
+    } catch (e) {
+      _showSnackBar('Login error: $e');
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void _signUp() async {
+    setState(() => isLoading = true);
     try {
       final response = await supabase.auth.signUp(
-        email: email,
-        password: password,
-        data: {'username': username},
-        emailRedirectTo: 'io.supabase.flutter://login-callback/',
+        email: _emailController.text,
+        password: _passwordController.text,
       );
 
-      if (response.user == null) {
-        throw Exception('Sign up failed - no user returned');
+      if (response.user != null) {
+        _showSnackBar('Check your email to confirm sign-up');
       }
-
-      await supabase.from('profiles').upsert({
-        'id': response.user!.id,
-        'username': username,
-        'email': email,
-        'phone': phone,
-        'email_confirmed': false,
-      });
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Account created! Please check your email to verify your account.'),
-          duration: Duration(seconds: 5),
-        ),
-      );
-
-      _emailController.clear();
-      _passwordController.clear();
-      toggleAuthMode();
-    } on AuthException catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error signing up: $error')),
-      );
+    } catch (e) {
+      _showSnackBar('Signup error: $e');
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  Future<void> _signIn() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() => isLoading = true);
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    try {
-      final authResponse = await supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      if (authResponse.user == null) {
-        throw Exception('Invalid email or password');
-      }
-
-      final profileResponse = await supabase
-          .from('profiles')
-          .select('email_confirmed')
-          .eq('id', authResponse.user!.id)
-          .maybeSingle();
-
-      if (profileResponse == null) {
-        await supabase.auth.signOut();
-        throw Exception('This account does not exist. Please sign up first.');
-      }
-
-      if (profileResponse['email_confirmed'] != true) {
-        await supabase.auth.signOut();
-        throw Exception('Please verify your email before logging in.');
-      }
-
-      await supabase.from('profiles').update({
-        'last_login_at': DateTime.now().toIso8601String(),
-      }).eq('id', authResponse.user!.id);
-
-      if (!mounted) return;
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    } on AuthException catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $error')),
-      );
-    } finally {
-      setState(() => isLoading = false);
-    }
+  void _resendConfirmationEmail() {
+    _showSnackBar("Resend email link not implemented yet");
   }
 
-  Future<void> _resendConfirmationEmail() async {
-    final email = _emailController.text.trim();
-    if (email.isEmpty || !email.contains('@')) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address')),
-      );
-      return;
-    }
-
-    try {
-      await supabase.auth.resend(
-        type: OtpType.signup,
-        email: email,
-        emailRedirectTo: 'io.supabase.flutter://login-callback/',
-      );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Confirmation email resent! Please check your inbox.')),
-      );
-    } on AuthException catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
-    } catch (error) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error resending confirmation email')),
-      );
-    }
-  }
-
-  Future<void> _showForgotPasswordDialog() async {
-    final emailController = TextEditingController();
-    await showDialog(
+  void _showForgotPasswordDialog() {
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Reset Password'),
-        content: TextField(
-          controller: emailController,
-          decoration: const InputDecoration(
-            labelText: 'Enter your email',
-            hintText: 'user@example.com',
-          ),
-        ),
+      builder: (ctx) => AlertDialog(
+        title: const Text('Forgot Password'),
+        content: const Text('Password reset flow coming soon.'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty || !email.contains('@')) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a valid email')),
-                );
-                return;
-              }
-
-              try {
-                await supabase.auth.resetPasswordForEmail(
-                  email,
-                  redirectTo: 'io.supabase.flutter://reset-password-callback/',
-                );
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Password reset email sent!')),
-                );
-                Navigator.pop(context);
-              } catch (error) {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Error: $error')),
-                );
-              }
-            },
-            child: const Text('Send Reset Link'),
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Close'),
           ),
         ],
       ),
     );
   }
 
+  void _showSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Stack(
+        fit: StackFit.expand,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: const NetworkImage(
-                  'https://i.ibb.co/rKGX0Nd9/bg.png',
-                ),
-                fit: BoxFit.cover,
-                colorFilter: ColorFilter.mode(
-                  Colors.black.withOpacity(0.3),
-                  BlendMode.darken,
-                ),
-              ),
-            ),
+          Image.network(
+            "https://i.ibb.co/G37yb3Hs/bg.jpg",
+            fit: BoxFit.cover,
           ),
-          Container(color: Colors.black.withOpacity(0.2)),
+          Container(color: Colors.black.withOpacity(0.3)),
           Center(
             child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: FadeTransition(
-                  opacity: _animation,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Column(
-                        children: [
-                          Icon(Icons.medical_services, size: 60, color: Colors.white),
-                          SizedBox(height: 16),
-                          Text(
-                            'Digital Health Bharat',
-                            style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _controller,
+                      builder: (context, child) {
+                        return FadeTransition(
+                          opacity: _opacityAnimation,
+                          child: SlideTransition(
+                            position: _slideAnimation,
+                            child: isLogin
+                                ? _buildLoginForm()
+                                : _buildSignupForm(),
                           ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Your health, our priority',
-                            style: TextStyle(fontSize: 16, color: Colors.white70),
-                          ),
-                        ],
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: toggleAuthMode,
+                      child: Text(
+                        isLogin
+                            ? "Don't have an account? Sign Up"
+                            : "Already have an account? Log In",
+                        style: const TextStyle(color: Colors.white),
                       ),
-                      const SizedBox(height: 40),
-                      AnimatedContainer(
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeInOut,
-                        padding: const EdgeInsets.all(24),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.85),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 20)],
-                        ),
-                        child: Form(
-                          key: _formKey,
-                          child: isLogin ? _buildLoginForm() : _buildSignupForm(),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      TextButton(
-                        onPressed: isLoading ? null : toggleAuthMode,
-                        child: Text(
-                          isLogin ? 'Don\'t have an account? Sign up' : 'Already have an account? Login',
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-          if (isLoading)
-            Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Center(child: CircularProgressIndicator()),
-            ),
         ],
       ),
     );
@@ -363,21 +218,26 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   Widget _buildLoginForm() {
     return Column(
       children: [
-        const Text('Login to your account', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
-        const SizedBox(height: 24),
-        _buildTextField(_emailController, 'Email', Icons.email),
+        _buildTitle('Welcome Back'),
+        _buildTextField(_emailController, 'Email', Icons.email_outlined),
         const SizedBox(height: 16),
-        _buildTextField(_passwordController, 'Password', Icons.lock, obscure: true),
+        _buildTextField(_passwordController, 'Password', Icons.lock_outline, obscure: true),
         const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            TextButton(onPressed: _showForgotPasswordDialog, child: const Text('Forgot Password?')),
-            TextButton(onPressed: _resendConfirmationEmail, child: const Text('Resend Verification')),
+            TextButton(
+              onPressed: _showForgotPasswordDialog,
+              child: const Text('Forgot Password?', style: TextStyle(color: Colors.white)),
+            ),
+            TextButton(
+              onPressed: _resendConfirmationEmail,
+              child: const Text('Resend Verification', style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
         const SizedBox(height: 16),
-        _buildSubmitButton('Login', _signIn),
+        _buildSubmitButton('Login', _signIn, Icons.login),
       ],
     );
   }
@@ -385,55 +245,78 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
   Widget _buildSignupForm() {
     return Column(
       children: [
-        const Text('Create an account', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87)),
+        _buildTitle('Create Account'),
+        _buildTextField(_usernameController, 'Username', Icons.person_outline),
+        const SizedBox(height: 16),
+        _buildTextField(_emailController, 'Email', Icons.email_outlined),
+        const SizedBox(height: 16),
+        _buildTextField(_phoneController, 'Phone Number', Icons.phone_outlined),
+        const SizedBox(height: 16),
+        _buildTextField(_passwordController, 'Password', Icons.lock_outline, obscure: true),
         const SizedBox(height: 24),
-        _buildTextField(_usernameController, 'Username', Icons.person),
-        const SizedBox(height: 16),
-        _buildTextField(_emailController, 'Email', Icons.email),
-        const SizedBox(height: 16),
-        _buildTextField(_phoneController, 'Phone Number', Icons.phone, inputType: TextInputType.phone),
-        const SizedBox(height: 16),
-        _buildTextField(_passwordController, 'Password', Icons.lock, obscure: true),
+        _buildSubmitButton('Sign Up', _signUp, Icons.person_add),
+      ],
+    );
+  }
+
+  Widget _buildTitle(String text) {
+    return Column(
+      children: [
+        Text(
+          text,
+          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Your journey to better health starts here.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: Colors.white70,
+          ),
+        ),
         const SizedBox(height: 24),
-        _buildSubmitButton('Sign Up', _signUp),
       ],
     );
   }
 
   Widget _buildTextField(TextEditingController controller, String label, IconData icon,
-      {bool obscure = false, TextInputType inputType = TextInputType.text}) {
+      {bool obscure = false}) {
     return TextFormField(
       controller: controller,
       obscureText: obscure,
-      keyboardType: inputType,
+      style: const TextStyle(color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+        labelStyle: const TextStyle(color: Colors.white70),
+        prefixIcon: Icon(icon, color: Colors.white70),
         filled: true,
-        fillColor: Colors.grey[100],
+        fillColor: Colors.white.withOpacity(0.1),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
       ),
-      validator: (value) {
-        if (value == null || value.isEmpty) return 'Please enter your $label';
-        if (label == 'Email' && !value.contains('@')) return 'Please enter a valid email';
-        if (label == 'Password' && value.length < 6) return 'Password must be at least 6 characters';
-        if (label == 'Phone Number' && value.length < 10) return 'Please enter a valid phone number';
-        if (label == 'Username' && value.length < 3) return 'Username must be at least 3 characters';
-        return null;
-      },
     );
   }
 
-  Widget _buildSubmitButton(String label, Function() onPressed) {
+  Widget _buildSubmitButton(String text, Function() onPressed, IconData icon) {
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF6C56F5),
+        backgroundColor: Colors.deepPurpleAccent,
         foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         minimumSize: const Size(double.infinity, 50),
       ),
-      child: Text(label),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          Text(text, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
